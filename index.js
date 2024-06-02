@@ -49,8 +49,9 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
 
-    const apartmentCollection = client.db('windHouse').collection('apartment')
-    const usersCollection = client.db('windHouse').collection('users')
+    const apartmentCollection = client.db('windHouse').collection('apartment');
+    const usersCollection = client.db('windHouse').collection('users');
+    const agreementsCollection = client.db('windHouse').collection('agreements');
 
 
     // auth related api
@@ -136,6 +137,20 @@ async function run() {
         const result = await usersCollection.updateOne(query, updateDoc, options);
         res.send(result)
       });
+
+
+      // Agreement endpoint
+    app.post('/agreement', async (req, res) => {
+      const agreement = req.body;
+      const existingAgreement = await agreementsCollection.findOne({ userEmail: agreement.userEmail, apartmentNo: agreement.apartmentNo });
+      
+      if (existingAgreement) {
+        return res.status(400).send({ message: 'You have already applied for this apartment.' });
+      }
+
+      const result = await agreementsCollection.insertOne(agreement);
+      res.send(result);
+    });
 
 
 

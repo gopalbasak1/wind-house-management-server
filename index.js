@@ -3,7 +3,7 @@ const app = express();
 require('dotenv').config();
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
 
 const port = process.env.PORT || 5000;
@@ -47,6 +47,9 @@ async function run() {
     const apartmentCollection = client.db('windHouse').collection('apartment');
     const usersCollection = client.db('windHouse').collection('users');
     const agreementsCollection = client.db('windHouse').collection('agreements');
+    const paymentsCollection = client.db('windHouse').collection('payments');
+    const couponsCollection = client.db('windHouse').collection('coupons');
+
 
     // auth related api
     app.post('/jwt', async (req, res) => {
@@ -73,38 +76,38 @@ async function run() {
       }
     });
 
-    // Get all apartment from db
+    // Get all apartments from db
     app.get('/apartment', async (req, res) => {
       const result = await apartmentCollection.find().toArray();
       res.send(result);
     });
 
     // Get user info by email from db
-    app.get('/user/:email', async (req, res) => {
-      try {
-        const email = req.params.email;
-        const user = await usersCollection.findOne({ email });
-    
-        if (!user) {
-          return res.status(404).send({ message: 'User not found' });
-        }
-    
-        const agreement = await agreementsCollection.findOne({ userEmail: email });
-    
-        res.send({
-          ...user,
-          agreement: agreement || {
-            acceptDate: 'none',
-            floorNo: 'none',
-            blockName: 'none',
-            apartmentNo: 'none',
-          },
-        });
-      } catch (err) {
-        res.status(500).send({ message: 'Failed to retrieve user info', error: err.message });
-      }
+   app.get('/user/:email', async (req, res) => {
+  try {
+    const email = req.params.email;
+    const user = await usersCollection.findOne({ email });
+
+    if (!user) {
+      return res.status(404).send({ message: 'User not found' });
+    }
+
+    const agreement = await agreementsCollection.findOne({ userEmail: email });
+
+    res.send({
+      ...user,
+      agreement: agreement || {
+        acceptDate: 'none',
+        floorNo: 'none',
+        blockName: 'none',
+        apartmentNo: 'none',
+      },
     });
-    
+  } catch (err) {
+    res.status(500).send({ message: 'Failed to retrieve user info', error: err.message });
+  }
+});
+
     
     // Get all users data from db
     app.get('/users', async (req, res) => {
@@ -137,18 +140,106 @@ async function run() {
     });
 
     // Agreement endpoint
-    app.post('/agreement', verifyToken, async (req, res) => {
-      const agreement = req.body;
-      const existingAgreement = await agreementsCollection.findOne({
-        userEmail: agreement.userEmail,
-        apartmentNo: agreement.apartmentNo,
-      });
-      if (existingAgreement) {
-        return res.status(400).send({ message: 'You have already applied for this apartment.' });
+    // Agreement endpoint
+app.post('/agreement', async (req, res) => {
+  const agreement = req.body;
+  const existingAgreement = await agreementsCollection.findOne({
+    userEmail: agreement.userEmail,
+    apartmentNo: agreement.apartmentNo,
+  });
+
+  if (existingAgreement) {
+    return res.status(400).send({ message: 'You have already applied for this apartment.' });
+  }
+
+  // Add a timestamp to the agreement data
+  agreement.timestamp = new Date();
+
+  const result = await agreementsCollection.insertOne(agreement);
+  res.send(result);
+});
+
+
+    // Get all agreement requests
+    app.get('/agreements',  async (req, res) => {
+      try {
+        const agreements = await agreementsCollection.find({ status: 'pending' }).toArray();
+        res.send(agreements);
+      } catch (err) {
+        res.status(500).send({ message: 'Failed to retrieve agreement requests', error: err.message });
       }
-      const result = await agreementsCollection.insertOne(agreement);
-      res.send(result);
     });
+
+    // Update agreement status
+  app.put('/agreement/status', verifyToken, async (req, res) => {
+  const { id, status, userEmail } = req.body;
+
+  if (!id || !status) {
+    return res.status(400).send({ message: 'ID and status are required' });
+  }
+
+  try {
+    const query = { _id: new ObjectId(id) };
+    const updateDoc = { $set: { status } };
+    const result = await agreementsCollection.updateOne(query, updateDoc);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ message: 'Agreement not found' });
+    }
+
+    // If the agreement is accepted, update the user's role to 'member'
+    if (status === 'accepted') {
+      await usersCollection.updateOne({ email: userEmail }, { $set: { role: 'member' } });
+    }
+
+    res.send({ success: true, message: 'Agreement status updated successfully' });
+  } catch (err) {
+    res.status(500).send({ message: 'Failed to update agreement status', error: err.message });
+  }
+});
+
+// Endpoint to validate coupon
+app.post('/validate-coupon', async (req, res) => {
+  const { couponCode } = req.body;
+  const coupon = await couponsCollection.findOne({ code: couponCode });
+
+  if (!coupon || coupon.expired) {
+    return res.status(400).send({ message: 'Invalid or expired coupon' });
+  }
+
+  res.send({ discount: coupon.discount });
+});
+
+// Endpoint to record payment
+app.post('/make-payment', async (req, res) => {
+  const payment = req.body;
+  const result = await paymentsCollection.insertOne(payment);
+  res.send(result);
+});
+
+
+// Update user role
+app.put('/user/role', verifyToken, async (req, res) => {
+  const { email, role } = req.body;
+
+  if (!email || !role) {
+    return res.status(400).send({ message: 'Email and role are required' });
+  }
+
+  try {
+    const result = await usersCollection.updateOne({ email }, { $set: { role } });
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ message: 'User not found' });
+    }
+
+    res.send({ success: true, message: 'User role updated successfully' });
+  } catch (err) {
+    res.status(500).send({ message: 'Failed to update user role', error: err.message });
+  }
+});
+
+
 
 
     // Send a ping to confirm a successful connection

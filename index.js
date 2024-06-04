@@ -341,9 +341,23 @@ app.get('/profile', verifyToken, async (req, res) => {
       res.send(payment);
     });
 
- 
+    app.post('/store-payment', verifyToken, async (req, res) => {
+      const payment = req.body;
+      try {
+        const result = await paymentsCollection.insertOne(payment);
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: 'Failed to store payment', error: err.message });
+      }
+    });
 
+    app.get('/payments/:userEmail', async (req, res) => {
+      const { userEmail } = req.params;
+      const payments = await paymentsCollection.find({ userEmail }).toArray();
+      res.send(payments);
+    });
     
+
 
     // Add or update a coupon
     app.put('/coupon', verifyToken, async (req, res) => {

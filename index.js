@@ -47,9 +47,9 @@ async function run() {
     const apartmentCollection = client.db('windHouse').collection('apartment');
     const usersCollection = client.db('windHouse').collection('users');
     const agreementsCollection = client.db('windHouse').collection('agreements');
+    const acceptedAgreementsCollection = client.db('windHouse').collection('acceptedAgreements'); // New collection
     const paymentsCollection = client.db('windHouse').collection('payments');
     const couponsCollection = client.db('windHouse').collection('coupons');
-
 
     // auth related api
     app.post('/jwt', async (req, res) => {
@@ -83,32 +83,31 @@ async function run() {
     });
 
     // Get user info by email from db
-   app.get('/user/:email', async (req, res) => {
-  try {
-    const email = req.params.email;
-    const user = await usersCollection.findOne({ email });
+    app.get('/user/:email', async (req, res) => {
+      try {
+        const email = req.params.email;
+        const user = await usersCollection.findOne({ email });
 
-    if (!user) {
-      return res.status(404).send({ message: 'User not found' });
-    }
+        if (!user) {
+          return res.status(404).send({ message: 'User not found' });
+        }
 
-    const agreement = await agreementsCollection.findOne({ userEmail: email });
+        const agreement = await agreementsCollection.findOne({ userEmail: email });
 
-    res.send({
-      ...user,
-      agreement: agreement || {
-        acceptDate: 'none',
-        floorNo: 'none',
-        blockName: 'none',
-        apartmentNo: 'none',
-      },
+        res.send({
+          ...user,
+          agreement: agreement || {
+            acceptDate: 'none',
+            floorNo: 'none',
+            blockName: 'none',
+            apartmentNo: 'none',
+          },
+        });
+      } catch (err) {
+        res.status(500).send({ message: 'Failed to retrieve user info', error: err.message });
+      }
     });
-  } catch (err) {
-    res.status(500).send({ message: 'Failed to retrieve user info', error: err.message });
-  }
-});
 
-    
     // Get all users data from db
     app.get('/users', async (req, res) => {
       const result = await usersCollection.find().toArray();
@@ -140,28 +139,26 @@ async function run() {
     });
 
     // Agreement endpoint
-    // Agreement endpoint
-app.post('/agreement', async (req, res) => {
-  const agreement = req.body;
-  const existingAgreement = await agreementsCollection.findOne({
-    userEmail: agreement.userEmail,
-    apartmentNo: agreement.apartmentNo,
-  });
+    app.post('/agreement', async (req, res) => {
+      const agreement = req.body;
+      const existingAgreement = await agreementsCollection.findOne({
+        userEmail: agreement.userEmail,
+        apartmentNo: agreement.apartmentNo,
+      });
 
-  if (existingAgreement) {
-    return res.status(400).send({ message: 'You have already applied for this apartment.' });
-  }
+      if (existingAgreement) {
+        return res.status(400).send({ message: 'You have already applied for this apartment.' });
+      }
 
-  // Add a timestamp to the agreement data
-  agreement.timestamp = new Date();
+      // Add a timestamp to the agreement data
+      agreement.timestamp = new Date();
 
-  const result = await agreementsCollection.insertOne(agreement);
-  res.send(result);
-});
-
+      const result = await agreementsCollection.insertOne(agreement);
+      res.send(result);
+    });
 
     // Get all agreement requests
-    app.get('/agreements',  async (req, res) => {
+    app.get('/agreements', async (req, res) => {
       try {
         const agreements = await agreementsCollection.find({ status: 'pending' }).toArray();
         res.send(agreements);
@@ -171,7 +168,8 @@ app.post('/agreement', async (req, res) => {
     });
 
     // Update agreement status
-  app.put('/agreement/status', verifyToken, async (req, res) => {
+  // Update agreement status
+app.put('/agreement/status', verifyToken, async (req, res) => {
   const { id, status, userEmail } = req.body;
 
   if (!id || !status) {
@@ -187,9 +185,35 @@ app.post('/agreement', async (req, res) => {
       return res.status(404).send({ message: 'Agreement not found' });
     }
 
-    // If the agreement is accepted, update the user's role to 'member'
+    // If the agreement is accepted, update the user's role to 'member' and agreement details
     if (status === 'accepted') {
-      await usersCollection.updateOne({ email: userEmail }, { $set: { role: 'member' } });
+      const agreement = await agreementsCollection.findOne(query);
+
+      // Store the accepted agreement in the new collection
+      const acceptedAgreement = {
+        ...agreement,
+        acceptDate: new Date(),
+        status: 'accepted',
+      };
+      await acceptedAgreementsCollection.insertOne(acceptedAgreement);
+
+      await usersCollection.updateOne(
+        { email: userEmail },
+        {
+          $set: {
+            role: 'member',
+            agreement: {
+              acceptDate: acceptedAgreement.acceptDate,
+              floorNo: acceptedAgreement.floorNo,
+              blockName: acceptedAgreement.blockName,
+              apartmentNo: acceptedAgreement.apartmentNo,
+              rent: acceptedAgreement.rent,
+              status: acceptedAgreement.status,
+              timestamp: acceptedAgreement.timestamp,
+            },
+          },
+        }
+      );
     }
 
     res.send({ success: true, message: 'Agreement status updated successfully' });
@@ -198,63 +222,190 @@ app.post('/agreement', async (req, res) => {
   }
 });
 
-// Endpoint to validate coupon
-app.post('/validate-coupon', async (req, res) => {
-  const { couponCode } = req.body;
-  const coupon = await couponsCollection.findOne({ code: couponCode });
 
-  if (!coupon || coupon.expired) {
-    return res.status(400).send({ message: 'Invalid or expired coupon' });
-  }
+    // Endpoint to validate coupon
+    app.post('/validate-coupon', async (req, res) => {
+      const { couponCode } = req.body;
+      const coupon = await couponsCollection.findOne({ code: couponCode });
 
-  res.send({ discount: coupon.discount });
-});
+      if (!coupon || coupon.expired) {
+        return res.status(400).send({ message: 'Invalid or expired coupon' });
+      }
 
-// Endpoint to record payment
-app.post('/make-payment', async (req, res) => {
-  const payment = req.body;
-  const result = await paymentsCollection.insertOne(payment);
-  res.send(result);
-});
+      res.send({ discount: coupon.discount });
+    });
 
+    // Endpoint to record payment
+    app.post('/make-payment', async (req, res) => {
+      const payment = req.body;
+      const result = await paymentsCollection.insertOne(payment);
+      res.send(result);
+    });
 
-// Update user role
+    app.put('/user/accept-request', verifyToken, async (req, res) => {
+      const { email, agreementDetails } = req.body;
+    
+      if (!email || !agreementDetails) {
+        return res.status(400).send({ message: 'Email and agreement details are required' });
+      }
+    
+      try {
+        const result = await usersCollection.updateOne(
+          { email },
+          { $set: { agreement: agreementDetails } }
+        );
+    
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: 'User not found' });
+        }
+    
+        res.send({ success: true, message: 'Agreement accepted and updated successfully' });
+      } catch (err) {
+        res.status(500).send({ message: 'Failed to update user agreement', error: err.message });
+      }
+    });
+    
+
+    // Update user role and agreement data
+    // Update user role and agreement data
 app.put('/user/role', verifyToken, async (req, res) => {
-  const { email, role } = req.body;
-
-  if (!email || !role) {
-    return res.status(400).send({ message: 'Email and role are required' });
-  }
+  const { email, role, agreementDetails } = req.body;
 
   try {
-    const result = await usersCollection.updateOne({ email }, { $set: { role } });
-
-    if (result.matchedCount === 0) {
+    const user = await usersCollection.findOne({ email });
+    if (!user) {
       return res.status(404).send({ message: 'User not found' });
     }
 
-    res.send({ success: true, message: 'User role updated successfully' });
+    const updateDoc = {
+      $set: {
+        role,
+        agreement: agreementDetails,
+      },
+    };
+
+    const result = await usersCollection.updateOne({ email }, updateDoc);
+    res.send(result);
   } catch (err) {
     res.status(500).send({ message: 'Failed to update user role', error: err.message });
   }
 });
 
+    // Get user's profile data
+   // Get user's profile data
+app.get('/profile', verifyToken, async (req, res) => {
+  try {
+    const email = req.user.email;
+    const user = await usersCollection.findOne({ email });
+    console.log(user);
+    if (!user) {
+      return res.status(404).send({ message: 'User not found' });
+    }
+
+    const profile = {
+      name: user.name,
+      image: user.image,
+      email: user.email,
+      agreement: user.agreement || 
+      {
+        acceptDate: 'none',
+        floorNo: 'none',
+        blockName: 'none',
+        apartmentNo: 'none',
+        rent: 'none',
+        status: 'none',
+        timestamp: 'none',
+      },
+    };
+
+    res.send(profile);
+  } catch (err) {
+    res.status(500).send({ message: 'Failed to retrieve profile data', error: err.message });
+  }
+});
+
+
+    // Get all payments made by a user
+    app.get('/payments/:userEmail', async (req, res) => {
+      const { userEmail } = req.params;
+      const payments = await paymentsCollection.find({ userEmail }).toArray();
+      res.send(payments);
+    });
+
+    // Get payment by id
+    app.get('/payment/:id', async (req, res) => {
+      const { id } = req.params;
+      const payment = await paymentsCollection.findOne({ _id: new ObjectId(id) });
+      res.send(payment);
+    });
+
+    // Add or update a coupon
+    app.put('/coupon', verifyToken, async (req, res) => {
+      const coupon = req.body;
+      const query = { code: coupon.code };
+      const updateDoc = { $set: coupon };
+      const options = { upsert: true };
+      const result = await couponsCollection.updateOne(query, updateDoc, options);
+      res.send(result);
+    });
+
+    // Get all coupons
+    app.get('/coupons', async (req, res) => {
+      const coupons = await couponsCollection.find().toArray();
+      res.send(coupons);
+    });
+
+ // Update user info endpoint
+app.put('/user/:id', async (req, res) => {
+  const id = req.params.id;
+  const user = req.body;
+  console.log("Updating user with ID:", id); // Debug log
+  console.log("New user data:", user); // Debug log
+
+  const query = { _id: new ObjectId(id) };
+  const updateDoc = {
+    $set: user,
+  };
+
+  try {
+    const result = await usersCollection.updateOne(query, updateDoc);
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ message: 'User not found' });
+    }
+    res.send(result);
+  } catch (err) {
+    console.error("Error updating user:", err); // Error log
+    res.status(500).send({ message: 'Failed to update user', error: err.message });
+  }
+});
 
 
 
-    // Send a ping to confirm a successful connection
+    // Add this endpoint in your Express server setup
+    app.get('/accepted-agreements/:userEmail', verifyToken, async (req, res) => {
+      const { userEmail } = req.params;
+      try {
+        const acceptedAgreements = await acceptedAgreementsCollection.find({ userEmail }).toArray();
+        res.send(acceptedAgreements);
+      } catch (err) {
+        res.status(500).send({ message: 'Failed to retrieve accepted agreements', error: err.message });
+      }
+    });
+
+
     await client.db('admin').command({ ping: 1 });
     console.log('Pinged your deployment. You successfully connected to MongoDB!');
   } finally {
-    // Ensures that the client will close when you finish/error
+    // Do not close the connection as the server should keep running
+    // await client.close();
   }
 }
 run().catch(console.dir);
 
 app.get('/', (req, res) => {
-  res.send('Hello from Wind House Server..');
+  res.send('WindHouse server is running');
 });
 
 app.listen(port, () => {
-  console.log(`Wind House is running on port ${port}`);
+  console.log(`WindHouse server is running on port ${port}`);
 });

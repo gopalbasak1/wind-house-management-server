@@ -5,6 +5,8 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
+const stripe = require("stripe")(process.env.STRIP_SECRET_KEY)
+
 
 const port = process.env.PORT || 5000;
 
@@ -339,6 +341,10 @@ app.get('/profile', verifyToken, async (req, res) => {
       res.send(payment);
     });
 
+ 
+
+    
+
     // Add or update a coupon
     app.put('/coupon', verifyToken, async (req, res) => {
       const coupon = req.body;
@@ -391,6 +397,25 @@ app.put('/user/:id', async (req, res) => {
         res.status(500).send({ message: 'Failed to retrieve accepted agreements', error: err.message });
       }
     });
+
+    //create-payment-intent
+    app.post('/create-payment-intent', verifyToken, async(req, res)=>{
+      const price = req.body.price;
+      const priceInCent = parseFloat(price)*100;
+      if(!price || priceInCent < 1) return;
+      //generate clientSecret
+      const {client_secret} = await stripe.paymentIntents.create({
+        amount: priceInCent,
+        currency: "usd",
+        // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      })
+      //send client secret as response
+      res.send({clientSecret: client_secret})
+
+    })
 
 
     await client.db('admin').command({ ping: 1 });

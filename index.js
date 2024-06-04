@@ -53,6 +53,31 @@ async function run() {
     const paymentsCollection = client.db('windHouse').collection('payments');
     const couponsCollection = client.db('windHouse').collection('coupons');
 
+     //verify admin middleware
+     const verifyAdmin = async(req, res, next)=>{
+      console.log('hello');
+      const user = req.user;
+      const query = {email: user?.email};
+      const result = await usersCollection.findOne(query);
+      if(!result || result?.role !== 'admin') return res.status(401).send({message: 'unauthorized access!!'})
+
+        next();
+    }
+
+
+     //verify host middleware
+     const verifyMember = async(req, res, next)=>{
+      console.log('hello');
+      const user = req.user;
+      const query = {email: user?.email};
+      const result = await usersCollection.findOne(query);
+      if(!result || result?.role !== 'member'){
+        return res.status(401).send({message: 'unauthorized access!!'})
+      }
+
+        next();
+    }
+
     // auth related api
     app.post('/jwt', async (req, res) => {
       const user = req.body;

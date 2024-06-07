@@ -470,6 +470,45 @@ app.put('/user/:id', async (req, res) => {
     const result = await announcementsCollection.find().toArray();
       res.send(result);
   });
+
+
+  app.get('/admin-profile', verifyToken, verifyAdmin, async (req, res) => {
+    try {
+      const userEmail = req.user.email;
+      const user = await usersCollection.findOne({ email: userEmail });
+  
+      if (!user) {
+        return res.status(404).send({ message: 'Admin not found' });
+      }
+  
+      const totalRooms = await apartmentCollection.countDocuments();
+      const totalUsers = await usersCollection.countDocuments();
+      const totalMembers = await usersCollection.countDocuments({ role: 'member' });
+      const totalAgreements = await agreementsCollection.countDocuments();
+      const unavailableRooms = await agreementsCollection.countDocuments({ status: 'accepted' });
+  
+      const availableRooms = totalRooms - unavailableRooms;
+      const percentageAvailableRooms = (availableRooms / totalRooms) * 100;
+      const percentageUnavailableRooms = (unavailableRooms / totalRooms) * 100;
+  
+      const adminProfile = {
+        name: user.displayName,
+        image: user.image,
+        email: user.email,
+        totalRooms,
+        percentageAvailableRooms: percentageAvailableRooms.toFixed(2),
+        percentageUnavailableRooms: percentageUnavailableRooms.toFixed(2),
+        totalUsers,
+        totalMembers,
+      };
+  
+      res.send(adminProfile);
+    } catch (err) {
+      res.status(500).send({ message: 'Failed to retrieve admin profile', error: err.message });
+    }
+  });
+  
+  
     
 
     await client.db('admin').command({ ping: 1 });

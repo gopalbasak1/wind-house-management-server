@@ -386,20 +386,21 @@ app.get('/profile', verifyToken, async (req, res) => {
 
 
     // Add or update a coupon
-    app.put('/coupon', verifyToken, async (req, res) => {
-      const coupon = req.body;
-      const query = { code: coupon.code };
-      const updateDoc = { $set: coupon };
-      const options = { upsert: true };
-      const result = await couponsCollection.updateOne(query, updateDoc, options);
-      res.send(result);
-    });
+app.put('/coupon', async (req, res) => {
+  const coupon = req.body;
+  const query = { code: coupon.code };
+  const updateDoc = { $set: coupon };
+  const options = { upsert: true };
+  const result = await couponsCollection.updateOne(query, updateDoc, options);
+  res.send(result);
+});
 
-    // Get all coupons
-    app.get('/coupons', async (req, res) => {
-      const coupons = await couponsCollection.find().toArray();
-      res.send(coupons);
-    });
+// Get all coupons
+app.get('/coupons', async (req, res) => {
+  const coupons = await couponsCollection.find().toArray();
+  res.send(coupons);
+});
+
 
  // Update user info endpoint
 app.put('/user/:id', async (req, res) => {

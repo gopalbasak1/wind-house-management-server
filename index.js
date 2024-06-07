@@ -24,11 +24,11 @@ app.use(cookieParser());
 const verifyToken = (req, res, next) => {
   const token = req.cookies?.token;
   if (!token) {
-    return res.status(401).send({ message: 'unauthorized access' });
+    return res.status(401).send({ message: 'Unauthorized access' });
   }
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
-      return res.status(401).send({ message: 'unauthorized access' });
+      return res.status(401).send({ message: 'Unauthorized access' });
     }
     req.user = decoded;
     next();
@@ -52,17 +52,18 @@ async function run() {
     const acceptedAgreementsCollection = client.db('windHouse').collection('acceptedAgreements'); // New collection
     const paymentsCollection = client.db('windHouse').collection('payments');
     const couponsCollection = client.db('windHouse').collection('coupons');
+    const announcementsCollection = client.db('windHouse').collection('announcements');
 
-     //verify admin middleware
-     const verifyAdmin = async(req, res, next)=>{
-      console.log('hello');
-      const user = req.user;
-      const query = {email: user?.email};
-      const result = await usersCollection.findOne(query);
-      if(!result || result?.role !== 'admin') return res.status(401).send({message: 'unauthorized access!!'})
-
-        next();
-    }
+     // Verify Admin Middleware
+const verifyAdmin = async (req, res, next) => {
+  const user = req.user;
+  const query = { email: user?.email };
+  const result = await usersCollection.findOne(query);
+  if (!result || result?.role !== 'admin') {
+    return res.status(401).send({ message: 'Unauthorized access' });
+  }
+  next();
+};
 
 
      //verify host middleware
@@ -454,8 +455,21 @@ app.put('/user/:id', async (req, res) => {
       //send client secret as response
       res.send({clientSecret: client_secret})
 
-    })
+    });
 
+    // Add this to check the server is receiving the request correctly
+  // Add this to check the server is receiving the request correctly
+  app.post('/announcements', async (req, res) => {
+    const reviewData = req.body;
+      const result = await announcementsCollection.insertOne(reviewData);
+      res.send(result);
+  });
+  
+  app.get('/announcements', async (req, res) => {
+    const result = await announcementsCollection.find().toArray();
+      res.send(result);
+  });
+    
 
     await client.db('admin').command({ ping: 1 });
     console.log('Pinged your deployment. You successfully connected to MongoDB!');

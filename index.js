@@ -104,11 +104,6 @@ const verifyAdmin = async (req, res, next) => {
       }
     });
 
-    // Get all apartments from db
-    app.get('/apartment', async (req, res) => {
-      const result = await apartmentCollection.find().toArray();
-      res.send(result);
-    });
 
     // Get user info by email from db
     app.get('/user/:email', async (req, res) => {
@@ -401,6 +396,15 @@ app.get('/coupons', async (req, res) => {
   res.send(coupons);
 });
 
+// Delete a coupon
+app.delete('/coupon/:id', async (req, res) => {
+  const { id } = req.params;
+  const query = { _id: new ObjectId(id) };
+  const result = await couponsCollection.deleteOne(query);
+  res.send(result);
+});
+
+
 
  // Update user info endpoint
 app.put('/user/:id', async (req, res) => {
@@ -507,9 +511,25 @@ app.put('/user/:id', async (req, res) => {
       res.status(500).send({ message: 'Failed to retrieve admin profile', error: err.message });
     }
   });
-  
-  
-    
+
+   // Get apartments with pagination
+// Get apartments with pagination
+app.get('/apartment', async (req, res) => {
+  const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
+  const limit = parseInt(req.query.limit) || 6; // Default to 6 items per page if not provided
+  const skip = (page - 1) * limit;
+
+  try {
+      const apartments = await apartmentCollection.find().skip(skip).limit(limit).toArray();
+      const total = await apartmentCollection.countDocuments();
+      res.send({ apartments, total, page, totalPages: Math.ceil(total / limit) });
+  } catch (error) {
+      res.status(500).send({ error: 'An error occurred while fetching apartments' });
+  }
+});
+
+
+
 
     await client.db('admin').command({ ping: 1 });
     console.log('Pinged your deployment. You successfully connected to MongoDB!');

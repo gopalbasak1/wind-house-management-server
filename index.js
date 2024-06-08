@@ -22,7 +22,7 @@ app.use(cookieParser());
 
 // Verify Token Middleware
 const verifyToken = (req, res, next) => {
-  const token = req.cookies?.token;
+  const token = req.cookies?.token || req.headers['authorization']?.split(' ')[1];
   if (!token) {
     return res.status(401).send({ message: 'Unauthorized access' });
   }
@@ -34,6 +34,8 @@ const verifyToken = (req, res, next) => {
     next();
   });
 };
+
+
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.qhiqbma.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 const client = new MongoClient(uri, {
@@ -55,15 +57,16 @@ async function run() {
     const announcementsCollection = client.db('windHouse').collection('announcements');
 
      // Verify Admin Middleware
-const verifyAdmin = async (req, res, next) => {
-  const user = req.user;
-  const query = { email: user?.email };
-  const result = await usersCollection.findOne(query);
-  if (!result || result?.role !== 'admin') {
-    return res.status(401).send({ message: 'Unauthorized access' });
-  }
-  next();
-};
+     const verifyAdmin = async (req, res, next) => {
+      const user = req.user;
+      const query = { email: user?.email };
+      const result = await usersCollection.findOne(query);
+      if (!result || result?.role !== 'admin') {
+        return res.status(401).send({ message: 'Unauthorized access' });
+      }
+      next();
+    };
+    
 
 
      //verify host middleware
@@ -82,15 +85,9 @@ const verifyAdmin = async (req, res, next) => {
     // auth related api
     app.post('/jwt', async (req, res) => {
       const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: '365d',
-      });
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
-      }).send({ success: true });
-    });
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+      res.send({ token });
+    })
 
     app.get('/logout', async (req, res) => {
       try {
@@ -475,7 +472,6 @@ app.put('/user/:id', async (req, res) => {
       res.send(result);
   });
 
-
   app.get('/admin-profile', verifyToken, verifyAdmin, async (req, res) => {
     try {
       const userEmail = req.user.email;
@@ -511,6 +507,8 @@ app.put('/user/:id', async (req, res) => {
       res.status(500).send({ message: 'Failed to retrieve admin profile', error: err.message });
     }
   });
+  
+  
 
    // Get apartments with pagination
 // Get apartments with pagination

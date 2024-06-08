@@ -12,7 +12,12 @@ const port = process.env.PORT || 5000;
 
 // middleware
 const corsOptions = {
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  origin: [
+    'http://localhost:5173', 
+    'http://localhost:5174',
+    'https://windhouse-92e50.web.app/',
+   ' https://windhouse-92e50.firebaseapp.com/'
+  ],
   credentials: true,
   optionSuccessStatus: 200,
 };
@@ -187,7 +192,6 @@ async function run() {
       }
     });
 
-    // Update agreement status
   // Update agreement status
 app.put('/agreement/status', verifyToken, async (req, res) => {
   const { id, status, userEmail } = req.body;
@@ -374,6 +378,11 @@ app.get('/profile', verifyToken, async (req, res) => {
       const payments = await paymentsCollection.find({ userEmail }).toArray();
       res.send(payments);
     });
+
+    app.get('/payments', verifyToken, verifyAdmin, async (req, res)=>{
+      const result = await paymentsCollection.find().toArray();
+      res.send(result)
+    })
     
 
 
@@ -528,8 +537,8 @@ app.get('/apartment', async (req, res) => {
 
 
 
-    await client.db('admin').command({ ping: 1 });
-    console.log('Pinged your deployment. You successfully connected to MongoDB!');
+    // await client.db('admin').command({ ping: 1 });
+    // console.log('Pinged your deployment. You successfully connected to MongoDB!');
   } finally {
     // Do not close the connection as the server should keep running
     // await client.close();

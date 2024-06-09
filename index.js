@@ -15,8 +15,8 @@ const corsOptions = {
   origin: [
     'http://localhost:5173', 
     'http://localhost:5174',
-    'https://windhouse-92e50.web.app/',
-   ' https://windhouse-92e50.firebaseapp.com/'
+    'https://windhouse-92e50.web.app',
+   ' https://windhouse-92e50.firebaseapp.com'
   ],
   credentials: true,
   optionSuccessStatus: 200,

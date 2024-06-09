@@ -163,24 +163,24 @@ async function run() {
       res.send(result);
     });
 
-    // Agreement endpoint
-    app.post('/agreement', async (req, res) => {
-      const agreement = req.body;
-      const existingAgreement = await agreementsCollection.findOne({
-        userEmail: agreement.userEmail,
-        apartmentNo: agreement.apartmentNo,
-      });
-
-      if (existingAgreement) {
-        return res.status(400).send({ message: 'You have already applied for this apartment.' });
-      }
-
-      // Add a timestamp to the agreement data
-      agreement.timestamp = new Date();
-
-      const result = await agreementsCollection.insertOne(agreement);
-      res.send(result);
+  // Agreement endpoint
+  app.post('/agreement', async (req, res) => {
+    const agreement = req.body;
+    const existingAgreement = await agreementsCollection.findOne({
+      userEmail: agreement.userEmail,
+      apartmentNo: agreement.apartmentNo,
     });
+
+    if (existingAgreement) {
+      return res.status(400).send({ message: 'You have already applied for this apartment.' });
+    }
+
+    // Add a timestamp to the agreement data
+    agreement.timestamp = new Date();
+
+    const result = await agreementsCollection.insertOne(agreement);
+    res.send(result);
+  });
 
     // Get all agreement requests
     app.get('/agreements', async (req, res) => {
@@ -192,7 +192,7 @@ async function run() {
       }
     });
 
-  // Update agreement status
+     // Update agreement status
 app.put('/agreement/status', verifyToken, async (req, res) => {
   const { id, status, userEmail } = req.body;
 
@@ -245,7 +245,6 @@ app.put('/agreement/status', verifyToken, async (req, res) => {
     res.status(500).send({ message: 'Failed to update agreement status', error: err.message });
   }
 });
-
 
     // Endpoint to validate coupon
     app.post('/validate-coupon', async (req, res) => {
